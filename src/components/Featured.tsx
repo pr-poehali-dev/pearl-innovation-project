@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Icon from "@/components/ui/icon";
+import VictoryScreen from "@/components/VictoryScreen";
+
+const START_DATE = new Date("2026-05-21");
+const END_DATE = new Date("2026-08-19");
 
 const API_URL = "https://functions.poehali.dev/93dcd3bd-2a80-46e5-88e3-a0a07efc3fa2";
 
@@ -129,6 +133,24 @@ export default function Featured() {
   }, [checks, loading, getTeamStreak]);
 
   const streak = getTeamStreak(checks);
+
+  const isFinished = new Date() >= END_DATE;
+
+  const getCleanDays = () => {
+    const allDates = Object.keys(checks);
+    const result: Record<string, number> = {};
+    PARTICIPANTS.forEach((p) => {
+      result[p.name] = allDates.filter((d) =>
+        SWEETS.every((s) => !checks[d]?.[`${p.id}__${s}`])
+      ).length;
+    });
+    return result;
+  };
+
+  if (isFinished) {
+    const totalDays = Math.round((END_DATE.getTime() - START_DATE.getTime()) / (1000 * 60 * 60 * 24));
+    return <VictoryScreen totalDays={totalDays} cleanDays={getCleanDays()} />;
+  }
 
   return (
     <div id="tracker" className="min-h-screen bg-white px-6 py-16 lg:py-24">
