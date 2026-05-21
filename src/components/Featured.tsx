@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Icon from "@/components/ui/icon";
 import VictoryScreen from "@/components/VictoryScreen";
+import Confetti from "@/components/Confetti";
 
 const START_DATE = new Date("2026-05-21");
 const END_DATE = new Date("2026-08-19");
@@ -34,6 +35,7 @@ export default function Featured() {
   const [syncing, setSyncing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showBanner, setShowBanner] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
   const [failBanner, setFailBanner] = useState<{ name: string; sweet: string } | null>(null);
   const today = getTodayKey();
 
@@ -122,11 +124,21 @@ export default function Featured() {
   useEffect(() => {
     if (!loading) {
       const streak = getTeamStreak(checks);
-      if (streak > 0 && streak % 7 === 0) {
-        const key = `streak_banner_${streak}`;
-        if (!sessionStorage.getItem(key)) {
-          setShowBanner(true);
-          sessionStorage.setItem(key, "1");
+      if (streak > 0) {
+        if (streak % 7 === 0) {
+          const key = `streak_banner_${streak}`;
+          if (!sessionStorage.getItem(key)) {
+            setShowBanner(true);
+            sessionStorage.setItem(key, "1");
+          }
+        }
+        if (streak % 10 === 0) {
+          const key = `streak_confetti_${streak}`;
+          if (!sessionStorage.getItem(key)) {
+            setShowConfetti(true);
+            sessionStorage.setItem(key, "1");
+            setTimeout(() => setShowConfetti(false), 5000);
+          }
         }
       }
     }
@@ -154,6 +166,9 @@ export default function Featured() {
 
   return (
     <div id="tracker" className="min-h-screen bg-white px-6 py-16 lg:py-24">
+      {/* Конфетти на каждый 10-й день */}
+      {showConfetti && <Confetti duration={5000} />}
+
       {/* Баннер поражения */}
       <AnimatePresence>
         {failBanner && (
