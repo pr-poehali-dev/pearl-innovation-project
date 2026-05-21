@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import Icon from "@/components/ui/icon";
 
 const API_URL = "https://functions.poehali.dev/93dcd3bd-2a80-46e5-88e3-a0a07efc3fa2";
@@ -28,6 +29,7 @@ export default function Featured() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showBanner, setShowBanner] = useState(false);
   const today = getTodayKey();
 
   const fetchChecks = useCallback(async () => {
@@ -93,8 +95,68 @@ export default function Featured() {
   const formatDate = (d: string) =>
     new Date(d).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 
+  // Считаем серию чистых дней подряд для всех участников вместе
+  const getTeamStreak = useCallback((data: Checks): number => {
+    const allDates = Object.keys(data).sort((a, b) => b.localeCompare(a));
+    let streak = 0;
+    for (const d of allDates) {
+      const allClean = PARTICIPANTS.every((p) =>
+        SWEETS.every((s) => !data[d]?.[`${p.id}__${s}`])
+      );
+      if (allClean) streak++;
+      else break;
+    }
+    return streak;
+  }, []);
+
+  useEffect(() => {
+    if (!loading) {
+      const streak = getTeamStreak(checks);
+      if (streak > 0 && streak % 7 === 0) {
+        const key = `streak_banner_${streak}`;
+        if (!sessionStorage.getItem(key)) {
+          setShowBanner(true);
+          sessionStorage.setItem(key, "1");
+        }
+      }
+    }
+  }, [checks, loading, getTeamStreak]);
+
+  const streak = getTeamStreak(checks);
+
   return (
     <div id="tracker" className="min-h-screen bg-white px-6 py-16 lg:py-24">
+      {/* Баннер-мотивашка */}
+      <AnimatePresence>
+        {showBanner && (
+          <motion.div
+            initial={{ opacity: 0, y: -80 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -80 }}
+            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            className="fixed top-6 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm mx-auto px-4"
+          >
+            <div className="bg-neutral-900 text-white rounded-2xl px-6 py-5 shadow-2xl flex items-start gap-4">
+              <span className="text-4xl leading-none">🏆</span>
+              <div className="flex-1">
+                <p className="font-bold text-base mb-1">
+                  {streak} дней без сладкого!
+                </p>
+                <p className="text-neutral-300 text-sm">
+                  Ольга и Белла — вы просто космос. Держите ритм, следующая веха через 7 дней!
+                </p>
+              </div>
+              <button
+                onClick={() => setShowBanner(false)}
+                className="text-neutral-500 hover:text-white transition-colors mt-0.5"
+              >
+                <Icon name="X" size={16} />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="max-w-4xl mx-auto">
         <p className="uppercase text-xs tracking-widest text-neutral-400 mb-3 text-center">
           Ежедневный чек-лист
@@ -106,11 +168,21 @@ export default function Featured() {
           Честно отметьте — без осуждений. Цель видеть картину, а не скрывать.
         </p>
 
-        <div className="flex items-center justify-center gap-2 mb-10">
-          <div className={`w-2 h-2 rounded-full ${syncing ? "bg-yellow-400 animate-pulse" : "bg-green-400"}`} />
-          <span className="text-xs text-neutral-400">
-            {syncing ? "Синхронизация..." : loading ? "Загрузка..." : "Данные синхронизированы"}
-          </span>
+        <div className="flex items-center justify-center gap-4 mb-10 flex-wrap">
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${syncing ? "bg-yellow-400 animate-pulse" : "bg-green-400"}`} />
+            <span className="text-xs text-neutral-400">
+              {syncing ? "Синхронизация..." : loading ? "Загрузка..." : "Синхронизировано"}
+            </span>
+          </div>
+          {streak >= 1 && (
+            <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-full px-4 py-1.5">
+              <span className="text-base">🔥</span>
+              <span className="text-sm font-semibold text-amber-700">
+                {streak} {streak === 1 ? "день" : streak < 5 ? "дня" : "дней"} подряд — так держать!
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="grid md:grid-cols-2 gap-8 mb-12">
