@@ -30,6 +30,7 @@ export default function Featured() {
   const [syncing, setSyncing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showBanner, setShowBanner] = useState(false);
+  const [failBanner, setFailBanner] = useState<{ name: string; sweet: string } | null>(null);
   const today = getTodayKey();
 
   const fetchChecks = useCallback(async () => {
@@ -61,6 +62,11 @@ export default function Featured() {
         [`${person}__${sweet}`]: newVal,
       },
     }));
+
+    if (newVal) {
+      const p = PARTICIPANTS.find((p) => p.id === person);
+      if (p) setFailBanner({ name: p.name, sweet });
+    }
 
     setSyncing(true);
     try {
@@ -126,6 +132,37 @@ export default function Featured() {
 
   return (
     <div id="tracker" className="min-h-screen bg-white px-6 py-16 lg:py-24">
+      {/* Баннер поражения */}
+      <AnimatePresence>
+        {failBanner && (
+          <motion.div
+            initial={{ opacity: 0, y: -80 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -80 }}
+            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            className="fixed top-6 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm px-4"
+          >
+            <div className="bg-white border border-neutral-200 rounded-2xl px-6 py-5 shadow-2xl flex items-start gap-4">
+              <span className="text-4xl leading-none">😅</span>
+              <div className="flex-1">
+                <p className="font-bold text-base text-neutral-900 mb-1">
+                  {failBanner.name} сорвалась
+                </p>
+                <p className="text-neutral-500 text-sm">
+                  {failBanner.sweet.split(" ").slice(1).join(" ")} — бывает. Один срыв не обнуляет прогресс. Завтра — новый день!
+                </p>
+              </div>
+              <button
+                onClick={() => setFailBanner(null)}
+                className="text-neutral-400 hover:text-neutral-700 transition-colors mt-0.5"
+              >
+                <Icon name="X" size={16} />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Баннер-мотивашка */}
       <AnimatePresence>
         {showBanner && (
