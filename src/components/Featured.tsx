@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Icon from "@/components/ui/icon";
+
+const API_URL = "https://functions.poehali.dev/93dcd3bd-2a80-46e5-88e3-a0a07efc3fa2";
 
 const PARTICIPANTS = [
   { id: "olga", name: "Ольга", emoji: "🧑" },
@@ -21,42 +23,75 @@ const getTodayKey = () => new Date().toISOString().split("T")[0];
 
 type Checks = Record<string, Record<string, boolean>>;
 
-const loadChecks = (): Checks => {
-  try {
-    const raw = localStorage.getItem("sugar_checks");
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-};
-
-const saveChecks = (data: Checks) => {
-  localStorage.setItem("sugar_checks", JSON.stringify(data));
-};
-
 export default function Featured() {
-  const [checks, setChecks] = useState<Checks>(loadChecks);
+  const [checks, setChecks] = useState<Checks>({});
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const today = getTodayKey();
 
-  const toggle = (person: string, sweet: string) => {
-    const updated: Checks = {
-      ...checks,
+  const fetchChecks = useCallback(async () => {
+    try {
+      const res = await fetch(API_URL);
+      const data = await res.json();
+      setChecks(data);
+    } catch {
+      // fallback silent
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchChecks();
+    const interval = setInterval(fetchChecks, 30000);
+    return () => clearInterval(interval);
+  }, [fetchChecks]);
+
+  const toggle = async (person: string, sweet: string) => {
+    const currentVal = !!checks[today]?.[`${person}__${sweet}`];
+    const newVal = !currentVal;
+
+    setChecks((prev) => ({
+      ...prev,
       [today]: {
-        ...(checks[today] ?? {}),
-        [`${person}__${sweet}`]: !checks[today]?.[`${person}__${sweet}`],
+        ...(prev[today] ?? {}),
+        [`${person}__${sweet}`]: newVal,
       },
-    };
-    setChecks(updated);
-    saveChecks(updated);
+    }));
+
+    setSyncing(true);
+    try {
+      await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: today,
+          person_id: person,
+          sweet,
+          checked: newVal,
+        }),
+      });
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const isChecked = (person: string, sweet: string) =>
     !!checks[today]?.[`${person}__${sweet}`];
 
-  const failCount = (person: string) =>
-    SWEETS.filter((s) => isChecked(person, s)).length;
+  const failCount = (person: string, dateKey = today) =>
+    SWEETS.filter((s) => !!checks[dateKey]?.[`${person}__${s}`]).length;
 
-  const isClean = (person: string) => failCount(person) === 0;
+  const isClean = (person: string, dateKey = today) => failCount(person, dateKey) === 0;
+
+  const historyDates = Object.keys(checks)
+    .filter((d) => d !== today)
+    .sort((a, b) => b.localeCompare(a))
+    .slice(0, 30);
+
+  const formatDate = (d: string) =>
+    new Date(d).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 
   return (
     <div id="tracker" className="min-h-screen bg-white px-6 py-16 lg:py-24">
@@ -67,11 +102,18 @@ export default function Featured() {
         <h2 className="text-3xl md:text-5xl font-bold text-neutral-900 text-center mb-4">
           Что съели сегодня?
         </h2>
-        <p className="text-neutral-500 text-center mb-12">
+        <p className="text-neutral-500 text-center mb-3">
           Честно отметьте — без осуждений. Цель видеть картину, а не скрывать.
         </p>
 
-        <div className="grid md:grid-cols-2 gap-8">
+        <div className="flex items-center justify-center gap-2 mb-10">
+          <div className={`w-2 h-2 rounded-full ${syncing ? "bg-yellow-400 animate-pulse" : "bg-green-400"}`} />
+          <span className="text-xs text-neutral-400">
+            {syncing ? "Синхронизация..." : loading ? "Загрузка..." : "Данные синхронизированы"}
+          </span>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-8 mb-12">
           {PARTICIPANTS.map((p) => (
             <div key={p.id} className="border border-neutral-200 rounded-2xl p-6">
               <div className="flex items-center justify-between mb-6">
@@ -90,7 +132,7 @@ export default function Featured() {
                     name={isClean(p.id) ? "ShieldCheck" : "AlertCircle"}
                     size={14}
                   />
-                  {isClean(p.id) ? "Чист!" : `Сорвался (${failCount(p.id)})`}
+                  {isClean(p.id) ? "Держится!" : `Срыв (${failCount(p.id)})`}
                 </div>
               </div>
 
@@ -127,8 +169,76 @@ export default function Featured() {
           ))}
         </div>
 
-        <p className="text-center text-xs text-neutral-400 mt-8">
-          Данные сохраняются на вашем устройстве · {new Date().toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}
+        {/* История */}
+        <div className="border border-neutral-200 rounded-2xl overflow-hidden">
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-neutral-50 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <Icon name="CalendarDays" size={18} className="text-neutral-500" />
+              <span className="font-semibold text-neutral-900">История по дням</span>
+              {historyDates.length > 0 && (
+                <span className="text-xs text-neutral-400">{historyDates.length} дней</span>
+              )}
+            </div>
+            <Icon
+              name={showHistory ? "ChevronUp" : "ChevronDown"}
+              size={18}
+              className="text-neutral-400"
+            />
+          </button>
+
+          {showHistory && (
+            <div className="border-t border-neutral-200">
+              {historyDates.length === 0 ? (
+                <p className="text-center text-neutral-400 py-8 text-sm">
+                  История появится после первых дней вызова
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-neutral-50 border-b border-neutral-200">
+                        <th className="text-left px-6 py-3 text-neutral-500 font-medium">Дата</th>
+                        {PARTICIPANTS.map((p) => (
+                          <th key={p.id} className="text-center px-4 py-3 text-neutral-500 font-medium">
+                            {p.emoji} {p.name}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historyDates.map((d) => (
+                        <tr key={d} className="border-b border-neutral-100 hover:bg-neutral-50">
+                          <td className="px-6 py-3 text-neutral-600">{formatDate(d)}</td>
+                          {PARTICIPANTS.map((p) => (
+                            <td key={p.id} className="px-4 py-3 text-center">
+                              {isClean(p.id, d) ? (
+                                <span className="inline-flex items-center gap-1 text-green-600 font-medium">
+                                  <Icon name="Check" size={14} />
+                                  Чисто
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-red-500">
+                                  <Icon name="X" size={14} />
+                                  {failCount(p.id, d)} поз.
+                                </span>
+                              )}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <p className="text-center text-xs text-neutral-400 mt-6">
+          Данные синхронизируются между устройствами · обновление каждые 30 сек
         </p>
       </div>
     </div>
