@@ -2,8 +2,8 @@ import { useState } from "react";
 import Icon from "@/components/ui/icon";
 
 const PARTICIPANTS = [
-  { id: "you", name: "Я", emoji: "🧑" },
-  { id: "colleague", name: "Коллега", emoji: "👩" },
+  { id: "olga", name: "Ольга", emoji: "🧑" },
+  { id: "bella", name: "Белла", emoji: "👩" },
 ];
 
 const SWEETS = [
